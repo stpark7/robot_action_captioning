@@ -1,0 +1,33 @@
+[Purpose]
+You need to create text data that describes a robot's actions based on simulation information at time t and time t+H.
+
+[Context]
+The first three images are captured at time t, consisting of Left, Right, and Eye-in-hand views. The next three images are captured at time t+H, also consisting of Left, Right, and Eye-in-hand views. 
+
+The Gripper state indicates how much the gripper is opened or closed, with the maximum opening being 8cm. In other words, values closer to 0.04 indicate an open state, while values closer to 0 indicate a closed gripper state.
+
+EEF Position and EEF Quaternion represent the position and orientation of the robot's end-effector relative to the robot's base frame, where the x-direction is forward/backward relative to the robot's base, the y-direction is left/right relative to the robot's base, and the z-direction is up/down relative to the robot's base.
+
+In the Objects information, 'obj' is the object to be grasped, 'container' is where the grasped object should be placed, and other objects are labeled as 'distr_counter'.
+
+[Instructions]
+
+1. Describe the robot's actions.
+   - Include specific movement directions (up/down, left/right, forward/backward)
+   - Describe gripper state changes (opening, closing, maintaining)
+   
+2. Explain the intention behind the robot's actions (including Affordance).
+   - Identify which part of the object is being targeted (handle, surface, edge, etc.)
+   - Explain why that specific grasp approach is suitable for the object
+   
+3. Describe the spatial relationship between objects.
+   - Mention relative positions using reference objects (container, distractors)
+   - Include distance/proximity information when relevant
+
+[Output Format]
+
+Provide a single coherent paragraph (3-5 sentences) that integrates all three aspects above.
+
+[Information]
+
+
