@@ -16,10 +16,10 @@ class ObjectInfo(BaseModel):
 
 class EnvironmentData(BaseModel):
     env_name: str # ex. PnPCountertoCab
-    robots: str
+    robot: str
     camera_names: List[str]
-    camera_heights: int
-    camera_widths: int
+    camera_height: int
+    camera_width: int
 
     @classmethod
     def load_from_json(cls, json_str: str):
@@ -27,10 +27,10 @@ class EnvironmentData(BaseModel):
         env_kwargs = data.get('env_kwargs', {})
         
         # Flatten env_kwargs into the main dict for initialization
-        data['robots'] = env_kwargs.get('robots')
+        data['robot'] = env_kwargs.get('robot')
         data['camera_names'] = env_kwargs.get('camera_names')
-        data['camera_heights'] = env_kwargs.get('camera_heights')
-        data['camera_widths'] = env_kwargs.get('camera_widths')
+        data['camera_height'] = env_kwargs.get('camera_height')
+        data['camera_width'] = env_kwargs.get('camera_width')
         
         return cls(**data)
 
@@ -78,21 +78,10 @@ class RobotData(BaseModel):
         data = json.loads(json_str)
         return cls(**data)
 
-    @field_validator(
-        "robot0_base_pos", "robot0_base_quat", 
-        "robot0_base_to_eef_pos", "robot0_base_to_eef_quat", 
-        "robot0_eef_pos", "robot0_eef_quat",
-        "robot0_gripper_qpos", "robot0_gripper_qvel",
-        "robot0_joint_pos", "robot0_joint_vel",
-        "robot0_joint_pos_cos", "robot0_joint_pos_sin",
-        "robot0_agentview_left_image", "robot0_agentview_right_image", "robot0_eye_in_hand_image", 
-        "object",
-        mode="before"
-    )
-    @classmethod
-    def validate_numpy_array(cls, v: Any) -> Any:
-        if v is None:
-            return None
-        if isinstance(v, list):
-            return np.array(v)
-        return v
+    # @classmethod
+    # def validate_numpy_array(cls, v: Any) -> Any:
+    #     if v is None:
+    #         return None
+    #     if isinstance(v, list):
+    #         return np.array(v)
+    #     return v
