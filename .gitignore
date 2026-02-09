@@ -8,6 +8,7 @@ datasets/__pycache__
 robot_action_captioning/datasets/__pycache__
 robot_action_captioning/scripts/__pycache__
 robot_action_captioning/utils/__pycache__
+robot_action_captioning/tests/__pycache__
 
 # IDE
 
