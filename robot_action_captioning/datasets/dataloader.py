@@ -1,126 +1,151 @@
 import h5py
 import json
-import random
 import numpy as np
 import os
-from typing import Type, TypeVar, Optional, List
-from pydantic import BaseModel
+from typing import Optional, Iterator
 
-from .schemas import EpisodeData, EnvironmentData, RobotData
-from .datatypes import Type1
+from .dataconfig import DataConfig
+from .datatype import EpisodeData, EnvironmentData, FrameData, Sample
 
-T = TypeVar("T", bound=BaseDataType)
+# TODO : hdf5파일 열고 닫는거 자주 하는거 개선
+# __getitem__ 메서드를 통한 인덱스 접근?
+# typehint 개선
+
 
 class DataLoader:
-    def __init__(self, dataset_path: str):
-        self.dataset_path = dataset_path
-        if not os.path.exists(dataset_path):
-            raise FileNotFoundError(f"Dataset not found at {dataset_path}")
-        self.environment_data = EnvironmentData().load()
-        self.episode_data = EpisodeData().load()
-        self.robot_data = RobotData().load()
+    """
+    Iterable DataLoader that loads data from HDF5 files based on DataConfig.
+    
+    Automatically calculates valid index range based on time offsets in DataConfig
+    to prevent out-of-bounds access.
+    
+    Args:
+        hdf5_path: Path to the HDF5 file.
+        demo_id: Demo ID to load (e.g., "demo_0").
+        data_config: DataConfig specifying which data to load.
+    
+    Usage:
+        config = DataConfig(time_offsets=[TimeOffset(offset=0), TimeOffset(offset=30)])
+        loader = DataLoader("data.hdf5", "demo_0", config)
+        
+        for sample in loader:
+            # sample contains episode, environment, and frames data
+            print(sample["frames"])
+    """
+    
+    def __init__(self, hdf5_path: str, demo_id: str, data_config: DataConfig):
+        self.hdf5_path = hdf5_path
+        self.demo_id = demo_id
+        self.data_config = data_config
+        
+        if not os.path.exists(hdf5_path):
+            raise FileNotFoundError(f"HDF5 file not found at {hdf5_path}")
 
-    def load(self, episode_id: Optional[int], data_type: Type[T]) -> T:
-        """
-        Loads data from HDF5 and populates the provided data_type model.
-        """
-        with h5py.File(self.dataset_path, "r") as f:
-            # 1. Environment Metadata
-            if "data" not in f or "env_args" not in f["data"].attrs:
-                 raise ValueError("Invalid HDF5 structure: missing env_args")
+        self._start: int = 0
+        self._end: int = 0
+        self._total_frames: int = 0
+        self._environment_data: Optional[EnvironmentData] = None
+        self._episode_data: Optional[EpisodeData] = None
+
+        self._load_metadata()
+
+        self._calculate_valid_range()
+
+    
+    def _load_metadata(self) -> None:
+        """Load episode and environment metadata from HDF5."""
+        with h5py.File(self.hdf5_path, "r") as f:
             
-            env_meta = json.loads(f["data"].attrs["env_args"])
-            env_name = env_meta.get("env_name")
+            # Validate structure
+            if "data" not in f:
+                raise ValueError(f"Invalid HDF5 structure: missing 'data' group")
+            if self.demo_id not in f["data"]:
+                raise ValueError(f"Demo '{self.demo_id}' not found in HDF5 file")
             
-            # 2. Episode Selection
-            all_demos = sorted(list(f["data"].keys()))
-            if episode_id is None:
-                selected_demo = random.choice(all_demos)
-            else:
-                selected_demo = f"demo_{episode_id}"
-                if selected_demo not in all_demos:
-                    raise ValueError(f"Episode {selected_demo} not found.")
+            ep_grp = f[f"data/{self.demo_id}"]
             
-            ep_grp = f[f"data/{selected_demo}"]
-            ep_meta = json.loads(ep_grp.attrs["ep_meta"])
-            
-            # 3. Time Sampling (t, t+H)
+            # Get total number of frames
             if "obs" not in ep_grp:
-                raise ValueError("No 'obs' group in episode.")
+                raise ValueError(f"No 'obs' group in demo '{self.demo_id}'")
             
             obs_grp = ep_grp["obs"]
-            num_steps = obs_grp["robot0_base_to_eef_pos"].shape[0]
+            # Use any existing key to determine frame count
+            first_key = list(obs_grp.keys())[0]
+            self._total_frames = obs_grp[first_key].shape[0]
             
-            if num_steps <= self.horizon:
-                 # Fallback or error? specific error for shortage
-                 raise ValueError(f"Episode length {num_steps} <= horizon {self.horizon}")
-                 
-            t = random.randint(0, num_steps - self.horizon - 1)
-            t_next = t + self.horizon
-            
-            # 4. Dynamic Object Population
-            # We instantiate the requested Pydantic model by gathering necessary data
-            # based on the expected fields in data_type.
-            
-            field_values = {}
-            model_fields = data_type.model_fields
-            
-            for field_name, field_info in model_fields.items():
-                field_type = field_info.annotation
-                
-                # Check if the field expects EpisodeData
-                if field_type == EpisodeData:
-                    field_values[field_name] = EpisodeData(
-                        episode_id=selected_demo,
-                        lang=ep_meta.get("lang", "")
-                    )
-                
-                # Check if the field expects EnvironmentData
-                elif field_type == EnvironmentData:
-                    # Parse objects info
-                    object_configs = ep_meta.get("object_cfgs", [])
-                    objects_info = []
-                    for cfg in object_configs:
-                        objects_info.append({
-                            "name": cfg.get("name"),
-                            "type": cfg.get("type"),
-                            "category": cfg.get("info", {}).get("cat"),
-                            "fixture": cfg.get("placement", {}).get("fixture")
-                        })
-                    
-                    field_values[field_name] = EnvironmentData(
-                        env_name=env_name,
-                        objects_info=objects_info
-                    )
-                
-                # Check if the field expects RobotData
-                # Here we need a convention. 
-                # If field_name is 'current_robot', use index t.
-                # If field_name is 'next_robot', use index t_next.
-                # If we want a generic 'robot', maybe use full sequence?
-                # For this refactoring, let's support specific keys.
-                elif field_type == RobotData:
-                    idx = t
-                    if "next" in field_name:
-                        idx = t_next
-                    
-                    # Extract necessary robot fields
-                    # We assume standard keys exist or we error/fill None.
-                    # Commonly used keys in this dataset:
-                    
-                    def get_obs(key, index):
-                        if key in obs_grp:
-                            return obs_grp[key][index]
-                        return np.array([]) # Or None
+            self._environment_data = EnvironmentData.load_from_hdf5(self.hdf5_path)
+            self._episode_data = EpisodeData.load_from_hdf5(self.hdf5_path, self.demo_id)
 
-                    r_data = RobotData(
-                        robot0_base_to_eef_pos=get_obs("robot0_base_to_eef_pos", idx),
-                        robot0_base_to_eef_quat=get_obs("robot0_base_to_eef_quat", idx),
-                        robot0_gripper_qpos=get_obs("robot0_gripper_qpos", idx),
-                        robot0_agentview_left_image=get_obs("robot0_agentview_left_image", idx),
-                        robot0_agentview_right_image=get_obs("robot0_agentview_right_image", idx),
-                        robot0_eye_in_hand_image=get_obs("robot0_eye_in_hand_image", idx)
-                    )
-                    field_values[field_name] = r_data
+    
+    def _calculate_valid_range(self) -> None:
+        """ Calculate valid base index range based on DataConfig's time offsets."""
+        min_offset = self.data_config.get_min_offset()  # e.g., -10
+        max_offset = self.data_config.get_max_offset()  # e.g., 30
+
+        self._start = abs(min_offset) if min_offset < 0 else 0
+
+        self._end = self._total_frames - max_offset
+    
+    def __iter__(self) -> Iterator[Sample]:
+        """Yield samples using a generator."""
+        for idx in range(self._start, self._end):
+            yield self._load_sample(idx)
+    
+    def __len__(self) -> int:
+        """Return number of valid samples."""
+        return self._end - self._start
+    
+    def get_valid_index_range(self) -> tuple[int, int]:
+        """Return the valid index range (start, end) as a tuple."""
+        return (self._start, self._end)
+    
+    def _load_sample(self, base_idx: int) -> Sample:
+        """
+        Load a complete sample for the given base index.
+        
+        Args:
+            base_idx: The base index (t) to load data around.
+        
+        Returns:
+            Sample containing episode, environment, and frames data.
+        """
+        sample = Sample(
+            episode=self._episode_data,
+            environment=self._environment_data,
+        )
+        
+        with h5py.File(self.hdf5_path, "r") as f:
+            obs_grp = f[f"data/{self.demo_id}/obs"]
+            actions = f[f"data/{self.demo_id}/actions"] if "actions" in f[f"data/{self.demo_id}"] else None
             
-            return data_type(**field_values)
+            for time_offset in self.data_config.time_offsets:
+                frame_idx = base_idx + time_offset.offset
+                frame_data = FrameData(offset=time_offset.offset)
+                
+                # Load images if requested
+                if time_offset.include_image:
+                    images = {}
+                    for key in self.data_config.image_keys:
+                        if key in obs_grp:
+                            images[key] = obs_grp[key][frame_idx]
+                    frame_data.images = images if images else None
+                
+                # Load robot state if requested
+                if time_offset.include_robot_state:
+                    robot_state = {}
+                    for key in self.data_config.robot_state_keys:
+                        if key in obs_grp:
+                            robot_state[key] = obs_grp[key][frame_idx]
+                    frame_data.robot_state = robot_state if robot_state else None
+                
+                # Load action if requested
+                if time_offset.include_action and actions is not None:
+                    action = {}
+                    for key in self.data_config.action_keys:
+                        if key == "actions":
+                            action[key] = actions[frame_idx]
+                    frame_data.action = action if action else None
+                
+                sample.frames.append(frame_data)
+        
+        return sample

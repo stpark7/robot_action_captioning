@@ -48,19 +48,14 @@ class DataConfig(BaseModel):
         action_keys: 가져올 액션 키 리스트
     
     Returns (from DataLoader):
-        dict: {
-            "episode": EpisodeData or None,
-            "environment": EnvironmentData or None,
-            "frames": [
-                {
-                    "offset": int,
-                    "images": dict or None,      # {key: np.ndarray}
-                    "robot_state": dict or None, # {key: np.ndarray}
-                    "action": dict or None,      # {key: np.ndarray}
-                },
-                ...
-            ]
-        }
+        Sample:
+            - episode: EpisodeData or None
+            - environment: EnvironmentData or None
+            - frames: List[FrameData]
+                - offset: int
+                - images: Dict[str, np.ndarray] or None
+                - robot_state: Dict[str, np.ndarray] or None
+                - action: Dict[str, np.ndarray] or None
     """
 
     # 시간 오프셋 리스트

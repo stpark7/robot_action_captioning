@@ -4,9 +4,20 @@ import h5py
 from pydantic import BaseModel, ConfigDict, field_validator
 import numpy as np
 
+
+class FrameData(BaseModel):
+    """단일 시점(time offset)의 데이터."""
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    offset: int
+    images: Optional[Dict[str, np.ndarray]] = None
+    robot_state: Optional[Dict[str, np.ndarray]] = None
+    action: Optional[Dict[str, np.ndarray]] = None
+
+
 class ObjectInfo(BaseModel):
     name: str
-    ob_type: str # e.g. "type": "microwave"
+    object_type: Optional[str] = None # e.g. "type": "microwave"
     category: Optional[str] = None
     fixture: Optional[str] = None # placement fixture
 
@@ -25,7 +36,14 @@ class EnvironmentData(BaseModel):
     @classmethod
     def _load_from_json(cls, json_str: str):
         data = json.loads(json_str)
-        return cls(**data)
+        env_kwargs = data.get('env_kwargs', {})
+        return cls(
+            env_name=data['env_name'],
+            robot=env_kwargs.get('robots', [None])[0],
+            camera_names=env_kwargs.get('camera_names', []),
+            camera_height=env_kwargs.get('camera_heights', 0),
+            camera_width=env_kwargs.get('camera_widths', 0),
+        )
 
     @classmethod
     def load_from_hdf5(cls, hdf5_file_path: str):
@@ -71,6 +89,14 @@ class EpisodeData(BaseModel):
             ep_meta['episode_id'] = episode_id
 
             return cls._load_from_json(json.dumps(ep_meta))
+
+
+class Sample(BaseModel):
+    """DataLoader가 yield하는 하나의 샘플."""
+    episode: Optional[EpisodeData] = None
+    environment: Optional[EnvironmentData] = None
+    frames: List[FrameData] = []
+
 
 class RobotData(BaseModel):
     """Robot states and observations for an entire episode.

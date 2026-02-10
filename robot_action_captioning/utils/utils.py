@@ -26,3 +26,13 @@ def get_hdf5_files(path: str) -> List[str]:
         hdf5_files.append(str(file_path))
     
     return sorted(hdf5_files)
+
+def get_demo_ids(hdf5_path: str) -> List[str]:
+    """HDF5 파일에서 모든 demo ID를 가져옵니다."""
+    with h5py.File(hdf5_path, "r") as f:
+        if "data" not in f:
+            return []
+        return sorted([key for key in f["data"].keys() if key.startswith("demo_")])
+
+def generate_prompt():
+    pass
