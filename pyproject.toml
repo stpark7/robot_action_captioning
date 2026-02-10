@@ -7,6 +7,14 @@ name = "robot_action_captioning"
 version = "0.1.0"
 description = "Robot Action Captioning"
 requires-python = ">=3.8"
+dependencies = [
+    "numpy",
+    "streamlit",
+    "Pillow",
+    "h5py",
+    "transformers",
+    "pydantic",
+]
 
 [tool.setuptools.packages.find]
 where = ["."]
