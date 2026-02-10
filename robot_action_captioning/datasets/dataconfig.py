@@ -1,34 +1,12 @@
 from typing import List, Optional
 from pydantic import BaseModel, Field
 
-"""
-schemas.py에서 정의된 데이터 중 어떤 데이터를 불러올지 정의하는 모듈입니다.
-사용 예시:
-    # t와 t+30 시점의 모든 데이터
-    config = DataConfig(
-        time_offsets=[
-            TimeOffset(offset=0),
-            TimeOffset(offset=30),
-        ]
-    )
-    
-    # t, t+10, t+20, t+30 이미지 + t, t+30 로봇 데이터만
-    config = DataConfig(
-        time_offsets=[
-            TimeOffset(offset=0, include_image=True, include_robot_state=True, include_action=True),
-            TimeOffset(offset=10, include_image=True, include_robot_state=False, include_action=False),
-            TimeOffset(offset=20, include_image=True, include_robot_state=False, include_action=False),
-            TimeOffset(offset=30, include_image=True, include_robot_state=True, include_action=True),
-        ]
-    )
-"""
-
-
 # =============================================================================
 # Time Offset 정의
 # =============================================================================
 
 class TimeOffset(BaseModel):
+
     """
     t 시점 기준 오프셋 정의
     
@@ -48,6 +26,7 @@ class TimeOffset(BaseModel):
         # t-10 시점 (과거), 로봇 상태만
         TimeOffset(offset=-10, include_image=False, include_robot_state=True, include_action=False)
     """
+
     offset: int = 0
     include_image: bool = True
     include_robot_state: bool = True
@@ -63,8 +42,6 @@ class DataConfig(BaseModel):
     어떤 데이터를 가져올지 정의하는 설정 클래스
     
     Args:
-        include_episode: 에피소드 메타데이터 포함 여부
-        include_environment: 환경 메타데이터 포함 여부
         time_offsets: 시간 오프셋 리스트 (각 시점별로 어떤 데이터를 가져올지 정의)
         image_keys: 가져올 이미지 키 리스트
         robot_state_keys: 가져올 로봇 상태 키 리스트
@@ -85,9 +62,6 @@ class DataConfig(BaseModel):
             ]
         }
     """
-    # 메타 정보 포함 여부
-    include_episode: bool = True
-    include_environment: bool = True
 
     # 시간 오프셋 리스트
     time_offsets: List[TimeOffset] = Field(default_factory=list)
@@ -126,12 +100,12 @@ class DataConfig(BaseModel):
         ]
     )
 
-    def get_max_future_offset(self) -> int:
+    def get_max_offset(self) -> int:
         if not self.time_offsets:
             return 0
         return max(t.offset for t in self.time_offsets)
 
-    def get_min_past_offset(self) -> int:
+    def get_min_offset(self) -> int:
         if not self.time_offsets:
             return 0
         return min(t.offset for t in self.time_offsets)
@@ -141,29 +115,29 @@ class DataConfig(BaseModel):
 # 프리셋 DataType들 (자주 쓰는 조합)
 # =============================================================================
 
-# 프리셋 1: t와 t+30 시점, 모든 데이터
-TwoFrameFullData = DataConfig(
-    time_offsets=[
-        TimeOffset(offset=0),
-        TimeOffset(offset=30),
-    ]
-)
+# # 프리셋 1: t와 t+30 시점, 모든 데이터
+# TwoFrameFullData = DataConfig(
+#     time_offsets=[
+#         TimeOffset(offset=0),
+#         TimeOffset(offset=30),
+#     ]
+# )
 
-# 프리셋 2: t, t+10, t+20, t+30 이미지 + t, t+30 로봇/액션 데이터만
-FourFrameSelectiveData = DataConfig(
-    time_offsets=[
-        TimeOffset(offset=0, include_image=True, include_robot_state=True, include_action=True),
-        TimeOffset(offset=10, include_image=True, include_robot_state=False, include_action=False),
-        TimeOffset(offset=20, include_image=True, include_robot_state=False, include_action=False),
-        TimeOffset(offset=30, include_image=True, include_robot_state=True, include_action=True),
-    ]
-)
+# # 프리셋 2: t, t+10, t+20, t+30 이미지 + t, t+30 로봇/액션 데이터만
+# FourFrameSelectiveData = DataConfig(
+#     time_offsets=[
+#         TimeOffset(offset=0, include_image=True, include_robot_state=True, include_action=True),
+#         TimeOffset(offset=10, include_image=True, include_robot_state=False, include_action=False),
+#         TimeOffset(offset=20, include_image=True, include_robot_state=False, include_action=False),
+#         TimeOffset(offset=30, include_image=True, include_robot_state=True, include_action=True),
+#     ]
+# )
 
-# 프리셋 3: 과거 + 현재 + 미래 (컨텍스트 포함)
-PastPresentFuture = DataConfig(
-    time_offsets=[
-        TimeOffset(offset=-10, include_image=True, include_robot_state=False, include_action=False),
-        TimeOffset(offset=0, include_image=True, include_robot_state=True, include_action=True),
-        TimeOffset(offset=10, include_image=True, include_robot_state=False, include_action=False),
-    ]
-)
+# # 프리셋 3: 과거 + 현재 + 미래 (컨텍스트 포함)
+# PastPresentFuture = DataConfig(
+#     time_offsets=[
+#         TimeOffset(offset=-10, include_image=True, include_robot_state=False, include_action=False),
+#         TimeOffset(offset=0, include_image=True, include_robot_state=True, include_action=True),
+#         TimeOffset(offset=10, include_image=True, include_robot_state=False, include_action=False),
+#     ]
+# )
