@@ -2,6 +2,7 @@
 __pycache__/
 
 src/
+sangtae/
 
 # __pycache__
 datasets/__pycache__
