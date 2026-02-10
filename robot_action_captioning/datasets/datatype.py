@@ -157,14 +157,14 @@ class RobotData(BaseModel):
                 'robot0_base_quat': obs_grp['robot0_base_quat'][:],
                 'robot0_base_to_eef_pos': obs_grp['robot0_base_to_eef_pos'][:],
                 'robot0_base_to_eef_quat': obs_grp['robot0_base_to_eef_quat'][:],
-                'robot0_eef_pos': obs_grp['robot0_eef_pos'][:],
-                'robot0_eef_quat': obs_grp['robot0_eef_quat'][:],
+                # 'robot0_eef_pos': obs_grp['robot0_eef_pos'][:],
+                # 'robot0_eef_quat': obs_grp['robot0_eef_quat'][:],
                 'robot0_gripper_qpos': obs_grp['robot0_gripper_qpos'][:],
-                'robot0_gripper_qvel': obs_grp['robot0_gripper_qvel'][:],
-                'robot0_joint_pos': obs_grp['robot0_joint_pos'][:],
-                'robot0_joint_vel': obs_grp['robot0_joint_vel'][:],
-                'robot0_joint_pos_cos': obs_grp['robot0_joint_pos_cos'][:],
-                'robot0_joint_pos_sin': obs_grp['robot0_joint_pos_sin'][:],
+                # 'robot0_gripper_qvel': obs_grp['robot0_gripper_qvel'][:],
+                # 'robot0_joint_pos': obs_grp['robot0_joint_pos'][:],
+                # 'robot0_joint_vel': obs_grp['robot0_joint_vel'][:],
+                # 'robot0_joint_pos_cos': obs_grp['robot0_joint_pos_cos'][:],
+                # 'robot0_joint_pos_sin': obs_grp['robot0_joint_pos_sin'][:],
             }
 
             # Images (optional) - load all frames

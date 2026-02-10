@@ -14,10 +14,10 @@ import h5py
 from PIL import Image
 from transformers import AutoProcessor, AutoModelForImageTextToText
 
-from robot_action_captioning.utils.utils import get_hdf5_files, get_demo_ids
+from robot_action_captioning.utils.utils import get_hdf5_files, get_demo_ids, generate_prompt
 from robot_action_captioning.datasets.dataloader import DataLoader
 from robot_action_captioning.datasets.dataconfig import DataConfig, TimeOffset
-from robot_action_captioning.config.config import SAVE_DIR
+from robot_action_captioning.config.config import SAVE_DIR, LLM_MODEL
 
 
 def convert_to_pil(images: dict) -> List[Image.Image]:
@@ -31,8 +31,7 @@ def convert_to_pil(images: dict) -> List[Image.Image]:
 def generate_action_caption(
     model,
     processor,
-    images_current: List[Image.Image],
-    images_next: List[Image.Image],
+    images: List[Image.Image],
     prompt_text: str,
 ) -> str:
     """LLM을 사용하여 action caption을 생성합니다."""
@@ -40,8 +39,7 @@ def generate_action_caption(
         {
             "role": "user",
             "content": [
-                *[{"type": "image", "image": img} for img in images_current],
-                *[{"type": "image", "image": img} for img in images_next],
+                *[{"type": "image", "image": img} for img in images],
                 {"type": "text", "text": prompt_text},
             ],
         },
@@ -50,6 +48,7 @@ def generate_action_caption(
     inputs = processor.apply_chat_template(
         messages,
         add_generation_prompt=True,
+        add_vision_id=True,
         tokenize=True,
         return_dict=True,
         return_tensors="pt",
@@ -100,26 +99,16 @@ def visualize_and_save(
     combined_image.save(output_path)
 
 
-def main():
-
-    # 출력 디렉토리 생성
-    captions_dir = SAVE_DIR / "captions"
-    visualizations_dir = SAVE_DIR / "visualizations"
-
-    if args.save_captions:
-        captions_dir.mkdir(parents=True, exist_ok=True)
-    if args.save_visualizations:
-        visualizations_dir.mkdir(parents=True, exist_ok=True)
-
-    print(f"Loading model: {args.model_name}")
-    processor = AutoProcessor.from_pretrained(args.model_name)
-    model = AutoModelForImageTextToText.from_pretrained(args.model_name)
+def main(args):
+    print(f"Loading model: {LLM_MODEL}")
+    processor = AutoProcessor.from_pretrained(LLM_MODEL)
+    model = AutoModelForImageTextToText.from_pretrained(LLM_MODEL)
 
     # * 모델에게 제공하고 싶은 포맷대로 DataConfig를 수정
     data_config = DataConfig(
         time_offsets=[
             TimeOffset(offset=0, include_image=True, include_robot_state=True, include_action=False),
-            TimeOffset(offset=args.frame_offset, include_image=True, include_robot_state=True, include_action=False),
+            TimeOffset(offset=30, include_image=True, include_robot_state=True, include_action=False),
         ],
     )
 
@@ -151,37 +140,51 @@ def main():
                 episode = sample.episode
                 environment = sample.environment
 
-                # 현재 시점(t)과 다음 시점(t+offset)의 이미지 추출
-                images_current = frames[0].images if frames[0].images else {}
-                images_next = frames[1].images if len(frames) > 1 and frames[1].images else {}
+                # DataConfig에 맞게 이미지가 포함된 모든 프레임에서 동적으로 수집
+                all_pil_images = []
+                for frame in frames:
+                    if frame.images:
+                        all_pil_images.extend(convert_to_pil(frame.images))
 
-                if not images_current or not images_next:
-                    continue
+                # 저장 경로 생성: SAVE_DIR / hdf5_name / demo_id / idx
+                save_path = SAVE_DIR / hdf5_name / demo_id / f"sample_{idx}"
+                save_path.mkdir(parents=True, exist_ok=True)
 
-                # Prompt 생성
-                prompt_text = generate_prompt(sample)
-
-                # Caption 생성 및 저장
-                if args.save_captions and model and processor:
-                    pil_current = convert_to_pil(images_current)
-                    pil_next = convert_to_pil(images_next)
-
-                    caption = generate_action_caption(
-                        model, processor, pil_current, pil_next, prompt_text
-                    )
-
-                    caption_filename = f"{hdf5_name}_{demo_id}_frame_{idx:06d}.txt"
-                    caption_path = captions_dir / caption_filename
-                    save_caption(caption, str(caption_path))
+                # Prompt 생성 및 저장
+                prompt_text = generate_prompt(sample, data_config)
+                with open(save_path / "prompt.txt", "w", encoding="utf-8") as f:
+                    f.write(prompt_text)
 
                 # 시각화 저장
-                if args.save_visualizations:
-                    viz_filename = f"{hdf5_name}_{demo_id}_frame_{idx:06d}.png"
-                    viz_path = visualizations_dir / viz_filename
-                    visualize_and_save(sample, str(viz_path))
+                visualize_and_save(sample, str(save_path / "image.png"))
+
+                # Caption 생성 및 저장
+                caption = generate_action_caption(
+                    model, processor, all_pil_images, prompt_text
+                )
+
+                save_caption(caption, str(save_path / "caption.txt"))
 
     print("\nDone!")
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    
+    parser.add_argument(
+        "--save_captions", 
+        action="store_true", 
+        default=True, 
+        help="Save generated captions"
+    )
+    
+    parser.add_argument(
+        "--save_visualizations", 
+        action="store_true", 
+        default=True, 
+        help="Save visualizations"
+    )
+    
+    args = parser.parse_args()
+    
+    main(args)
