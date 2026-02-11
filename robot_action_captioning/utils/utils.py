@@ -100,8 +100,10 @@ INSTRUCTIONS = (
 )
 
 OUTPUT_FORMAT = (
-    "Provide a single coherent paragraph (3-5 sentences)" 
-    "that integrates all three aspects above."
+    "Please write the output concisely in 1-2 sentences."
+    "Write in the format of intention + action, and include spatial information if necessary."
+    "Example: The robot arm moves forward to grab the mug inside the drawer."
+    "The robot arm adjusts the orientation of its end-effector to open the drawer."
 )
 
 
@@ -144,8 +146,6 @@ def _build_information(sample: "Sample", data_config: "DataConfig") -> str:
             lines.append("Objects:")
             for obj in sample.episode.objects_info:
                 parts = [obj.name]
-                if obj.object_type:
-                    parts.append(obj.object_type)
                 if obj.category:
                     parts.append(obj.category)
                 lines.append(f"  - {' | '.join(parts)}")

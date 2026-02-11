@@ -105,6 +105,14 @@ class DataConfig(BaseModel):
             return 0
         return min(t.offset for t in self.time_offsets)
 
+    def to_folder_name(self) -> str:
+        """DataConfig의 time offset 값들을 폴더명으로 변환합니다.
+        
+        예: offsets [0, 30, 60] -> "[0,30,60]"
+        """
+        offsets = [str(t.offset) for t in self.time_offsets]
+        return f"[{','.join(offsets)}]"
+
 
 # =============================================================================
 # 프리셋 DataType들 (자주 쓰는 조합)

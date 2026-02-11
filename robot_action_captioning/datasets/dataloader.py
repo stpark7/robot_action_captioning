@@ -3,6 +3,7 @@ import json
 import numpy as np
 import os
 from typing import Optional, Iterator
+import math
 
 from .dataconfig import DataConfig
 from .datatype import EpisodeData, EnvironmentData, FrameData, Sample
@@ -33,10 +34,11 @@ class DataLoader:
             print(sample["frames"])
     """
     
-    def __init__(self, hdf5_path: str, demo_id: str, data_config: DataConfig):
+    def __init__(self, hdf5_path: str, demo_id: str, data_config: DataConfig, step_size: int = 1):
         self.hdf5_path = hdf5_path
         self.demo_id = demo_id
         self.data_config = data_config
+        self.step_size = step_size
         
         if not os.path.exists(hdf5_path):
             raise FileNotFoundError(f"HDF5 file not found at {hdf5_path}")
@@ -88,12 +90,14 @@ class DataLoader:
     
     def __iter__(self) -> Iterator[Sample]:
         """Yield samples using a generator."""
-        for idx in range(self._start, self._end):
+        for idx in range(self._start, self._end, self.step_size):
             yield self._load_sample(idx)
     
     def __len__(self) -> int:
         """Return number of valid samples."""
-        return self._end - self._start
+        if self.step_size == 1:
+            return self._end - self._start
+        return math.ceil((self._end - self._start) / self.step_size)
     
     def get_valid_index_range(self) -> tuple[int, int]:
         """Return the valid index range (start, end) as a tuple."""
@@ -120,32 +124,45 @@ class DataLoader:
             
             for time_offset in self.data_config.time_offsets:
                 frame_idx = base_idx + time_offset.offset
-                frame_data = FrameData(offset=time_offset.offset)
                 
+                # Setup data containers
+                images = None
+                robot_state = None
+                action = None
+
                 # Load images if requested
                 if time_offset.include_image:
-                    images = {}
+                    image_data = {}
                     for key in self.data_config.image_keys:
                         if key in obs_grp:
-                            images[key] = obs_grp[key][frame_idx]
-                    frame_data.images = images if images else None
+                            image_data[key] = obs_grp[key][frame_idx]
+                    if image_data:
+                        images = image_data
                 
                 # Load robot state if requested
                 if time_offset.include_robot_state:
-                    robot_state = {}
+                    state_data = {}
                     for key in self.data_config.robot_state_keys:
                         if key in obs_grp:
-                            robot_state[key] = obs_grp[key][frame_idx]
-                    frame_data.robot_state = robot_state if robot_state else None
+                            state_data[key] = obs_grp[key][frame_idx]
+                    if state_data:
+                        robot_state = state_data
                 
                 # Load action if requested
                 if time_offset.include_action and actions is not None:
-                    action = {}
+                    action_data = {}
                     for key in self.data_config.action_keys:
                         if key == "actions":
-                            action[key] = actions[frame_idx]
-                    frame_data.action = action if action else None
+                            action_data[key] = actions[frame_idx]
+                    if action_data:
+                        action = action_data
                 
+                frame_data = FrameData(
+                    offset=time_offset.offset,
+                    images=images,
+                    robot_state=robot_state,
+                    action=action
+                )
                 sample.frames.append(frame_data)
         
         return sample

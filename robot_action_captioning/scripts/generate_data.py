@@ -17,7 +17,7 @@ from transformers import AutoProcessor, AutoModelForImageTextToText
 from robot_action_captioning.utils.utils import get_hdf5_files, get_demo_ids, generate_prompt
 from robot_action_captioning.datasets.dataloader import DataLoader
 from robot_action_captioning.datasets.dataconfig import DataConfig, TimeOffset
-from robot_action_captioning.config.config import SAVE_DIR, LLM_MODEL
+from robot_action_captioning.config.config import SAVE_DIR, LLM_MODEL, HDF5_PATH
 
 
 def convert_to_pil(images: dict) -> List[Image.Image]:
@@ -54,7 +54,7 @@ def generate_action_caption(
         return_tensors="pt",
     ).to(model.device)
 
-    outputs = model.generate(**inputs, max_new_tokens=2000)
+    outputs = model.generate(**inputs, max_new_tokens=700)
     return processor.decode(outputs[0][inputs["input_ids"].shape[-1]:])
 
 
@@ -69,7 +69,6 @@ def visualize_and_save(
     output_path: str,
 ) -> None:
     """스냅샷의 이미지들을 시각화하여 저장합니다. (3열 격자 배치)"""
-    from PIL import Image
 
     frames = sample.frames
     all_images = []
@@ -120,6 +119,7 @@ def main(args):
         time_offsets=[
             TimeOffset(offset=0, include_image=True, include_robot_state=True, include_action=False),
             TimeOffset(offset=30, include_image=True, include_robot_state=True, include_action=False),
+            TimeOffset(offset=60, include_image=True, include_robot_state=True, include_action=False),
         ],
     )
 
@@ -127,20 +127,19 @@ def main(args):
     hdf5_files = get_hdf5_files(HDF5_PATH)
     print(f"Found {len(hdf5_files)} HDF5 files")
 
-    # TODO : 한 샘플당 생성하는데 몇 분정도 걸리는지 테스트
     for hdf5_path in hdf5_files:
-        hdf5_name = Path(hdf5_path).stem
-        print(f"\nProcessing: {hdf5_name}")
+        print(f"\nProcessing: {hdf5_path}")
 
         # demo ID 순회
-        demo_ids = get_demo_ids(hdf5_path)
-        print(f"  Found {len(demo_ids)} demos")
+        # demo_ids = get_demo_ids(hdf5_path)
+        # print(f"  Found {len(demo_ids)} demos")
+        demo_ids = ["demo_1"]  # ! 테스트용: demo_1만 생성
 
         for demo_id in demo_ids:
             print(f"  Processing demo: {demo_id}")
 
             try:
-                loader = DataLoader(hdf5_path, demo_id, data_config)
+                loader = DataLoader(hdf5_path, demo_id, data_config, step_size=30)
             except Exception as e:
                 print(f"    Error loading demo {demo_id}: {e}")
                 continue
@@ -157,8 +156,8 @@ def main(args):
                     if frame.images:
                         all_pil_images.extend(convert_to_pil(frame.images))
 
-                # 저장 경로 생성: SAVE_DIR / hdf5_name / demo_id / idx
-                save_path = SAVE_DIR / hdf5_name / demo_id / f"sample_{idx}"
+                # 저장 경로 생성: SAVE_DIR / data_config_folder / env_name / demo_id / idx
+                save_path = SAVE_DIR / data_config.to_folder_name() / environment.env_name / demo_id / f"sample_{idx}"
                 save_path.mkdir(parents=True, exist_ok=True)
 
                 # Prompt 생성 및 저장
