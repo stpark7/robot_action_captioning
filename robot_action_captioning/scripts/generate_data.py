@@ -68,9 +68,8 @@ def visualize_and_save(
     sample,
     output_path: str,
 ) -> None:
-    """스냅샷의 이미지들을 시각화하여 저장합니다."""
+    """스냅샷의 이미지들을 시각화하여 저장합니다. (3열 격자 배치)"""
     from PIL import Image
-    import numpy as np
 
     frames = sample.frames
     all_images = []
@@ -83,18 +82,30 @@ def visualize_and_save(
     if not all_images:
         return
 
-    # 이미지들을 가로로 연결
     pil_images = [Image.fromarray(img) for img in all_images]
-    widths, heights = zip(*(img.size for img in pil_images))
     
-    total_width = sum(widths)
+    # 3열 격자 계산
+    cols = 3
+    rows = (len(pil_images) + cols - 1) // cols
+    
+    # 그리드 셀 크기 결정을 위한 최대 너비/높이 계산
+    widths, heights = zip(*(img.size for img in pil_images))
+    max_width = max(widths)
     max_height = max(heights)
+    
+    total_width = max_width * cols
+    total_height = max_height * rows
 
-    combined_image = Image.new("RGB", (total_width, max_height))
-    x_offset = 0
-    for img in pil_images:
-        combined_image.paste(img, (x_offset, 0))
-        x_offset += img.width
+    combined_image = Image.new("RGB", (total_width, total_height), (255, 255, 255))
+    
+    for idx, img in enumerate(pil_images):
+        col = idx % cols
+        row = idx // cols
+        
+        x_offset = col * max_width
+        y_offset = row * max_height
+        
+        combined_image.paste(img, (x_offset, y_offset))
 
     combined_image.save(output_path)
 
