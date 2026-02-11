@@ -72,10 +72,14 @@ CONTEXT = (
     "\n"
     "robot0_base_to_eef_pos and robot0_base_to_eef_quat represent "
     "the position and orientation of the robot's end-effector "
-    "relative to the robot's base frame, "
-    "where the x-direction is forward/backward relative to the robot's base, "
-    "the y-direction is left/right relative to the robot's base, "
-    "and the z-direction is up/down relative to the robot's base."
+    "relative to the robot's base frame.\\n"
+    "Coordinate directions:\\n"
+    "  - x-axis: decreasing x moves toward the robot's base, "
+    "increasing x moves away from the base (forward).\\n"
+    "  - y-axis: decreasing y moves to the left, "
+    "increasing y moves to the right.\\n"
+    "  - z-axis: increasing z moves upward, "
+    "decreasing z moves downward."
 )
 
 INSTRUCTIONS = (
