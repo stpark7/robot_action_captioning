@@ -123,7 +123,7 @@ def main():
         st.markdown("### 🖼️ Image")
         if image_path.exists():
             img = Image.open(image_path)
-            st.image(img, use_column_width=True)
+            st.image(img, use_container_width=True)
         else:
             st.warning("image.png 파일이 없습니다.")
 

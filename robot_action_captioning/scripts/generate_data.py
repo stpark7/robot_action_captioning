@@ -11,37 +11,32 @@ from pathlib import Path
 from typing import List, Optional
 
 import h5py
+import torch
 from PIL import Image
 from transformers import AutoProcessor, AutoModelForImageTextToText
 
-from robot_action_captioning.utils.utils import get_hdf5_files, get_demo_ids, generate_prompt
+from robot_action_captioning.utils.utils import get_hdf5_files, get_demo_ids, generate_prompt, generate_prompt_messages
 from robot_action_captioning.datasets.dataloader import DataLoader
 from robot_action_captioning.datasets.dataconfig import DataConfig, TimeOffset
 from robot_action_captioning.config.config import SAVE_DIR, LLM_MODEL, HDF5_PATH
 
 
-def convert_to_pil(images: dict) -> List[Image.Image]:
-    """이미지 딕셔너리를 PIL Image 리스트로 변환합니다."""
-    pil_images = []
-    for key in sorted(images.keys()):
-        pil_images.append(Image.fromarray(images[key]))
-    return pil_images
-
-
 def generate_action_caption(
     model,
     processor,
-    images: List[Image.Image],
-    prompt_text: str,
+    content: list,
 ) -> str:
-    """LLM을 사용하여 action caption을 생성합니다."""
+    """LLM을 사용하여 action caption을 생성합니다.
+    
+    Args:
+        model: LLM 모델
+        processor: LLM 프로세서
+        content: generate_prompt_messages가 반환한 content 리스트 (text/image 혼합)
+    """
     messages = [
         {
             "role": "user",
-            "content": [
-                *[{"type": "image", "image": img} for img in images],
-                {"type": "text", "text": prompt_text},
-            ],
+            "content": content,
         },
     ]
 
@@ -54,7 +49,7 @@ def generate_action_caption(
         return_tensors="pt",
     ).to(model.device)
 
-    outputs = model.generate(**inputs, max_new_tokens=700)
+    outputs = model.generate(**inputs, max_new_tokens=700, do_sample=False)
     return processor.decode(outputs[0][inputs["input_ids"].shape[-1]:])
 
 
@@ -112,14 +107,19 @@ def visualize_and_save(
 def main(args):
     print(f"Loading model: {LLM_MODEL}")
     processor = AutoProcessor.from_pretrained(LLM_MODEL)
-    model = AutoModelForImageTextToText.from_pretrained(LLM_MODEL)
+    model = AutoModelForImageTextToText.from_pretrained(
+        LLM_MODEL,
+        device_map="auto",
+        torch_dtype="auto",
+        trust_remote_code=True,
+    )
 
     # * 모델에게 제공하고 싶은 포맷대로 DataConfig를 수정
     data_config = DataConfig(
         time_offsets=[
             TimeOffset(offset=0, include_image=True, include_robot_state=True, include_action=False),
-            TimeOffset(offset=30, include_image=True, include_robot_state=True, include_action=False),
-            TimeOffset(offset=60, include_image=True, include_robot_state=True, include_action=False),
+            TimeOffset(offset=10, include_image=True, include_robot_state=True, include_action=False),
+            TimeOffset(offset=20, include_image=True, include_robot_state=True, include_action=False),
         ],
     )
 
@@ -151,16 +151,14 @@ def main(args):
                 environment = sample.environment
 
                 # DataConfig에 맞게 이미지가 포함된 모든 프레임에서 동적으로 수집
-                all_pil_images = []
-                for frame in frames:
-                    if frame.images:
-                        all_pil_images.extend(convert_to_pil(frame.images))
+                # generate_prompt_messages가 이미지 수집 + 인터리빙을 모두 처리
+                prompt_content = generate_prompt_messages(sample, data_config)
 
                 # 저장 경로 생성: SAVE_DIR / data_config_folder / env_name / demo_id / idx
                 save_path = SAVE_DIR / data_config.to_folder_name() / environment.env_name / demo_id / f"sample_{idx}"
                 save_path.mkdir(parents=True, exist_ok=True)
 
-                # Prompt 생성 및 저장
+                # 텍스트 전용 Prompt 저장 (시각화/디버깅용)
                 prompt_text = generate_prompt(sample, data_config)
                 with open(save_path / "prompt.txt", "w", encoding="utf-8") as f:
                     f.write(prompt_text)
@@ -168,9 +166,9 @@ def main(args):
                 # 시각화 저장
                 visualize_and_save(sample, str(save_path / "image.png"))
 
-                # Caption 생성 및 저장
+                # Caption 생성 및 저장 (인터리빙된 content 사용)
                 caption = generate_action_caption(
-                    model, processor, all_pil_images, prompt_text
+                    model, processor, prompt_content
                 )
 
                 save_caption(caption, str(save_path / "caption.txt"))

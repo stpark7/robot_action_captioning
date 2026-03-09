@@ -105,8 +105,6 @@ class RobotData(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     # Robot States & Observations (shape: [num_frames, ...])
-    robot0_base_pos: np.ndarray
-    robot0_base_quat: np.ndarray
     robot0_base_to_eef_pos: np.ndarray
     robot0_base_to_eef_quat: np.ndarray
     robot0_gripper_qpos: np.ndarray
